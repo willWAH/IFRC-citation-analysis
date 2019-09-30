@@ -1,0 +1,83 @@
+# Install the libraries (needs internet connection)
+packages <- c("igraph", "dplyr")
+install.packages(packages)
+
+# Load the libraries
+library(igraph)
+library(poweRlaw)
+library(dplyr)
+
+# Import the Pajek file
+file_path <- "E:/IFRC/citationTest.net"
+citation_graph <- read_graph(file_path, format = "pajek")
+
+# Get the degree distribution
+degree <- degree(citation_graph)
+graph_hist <- as.data.frame(table(degree))
+graph_hist$degree <- as.numeric(as.character(graph_hist$degree))
+# Have a look
+graph_hist
+
+# Remove isolated nodes to test for a fit with a powerlaw
+graph_pl <- graph_hist %>%
+  filter(degree > 0)
+
+# Check the degree distribution for a powerlaw
+# First construct the model using the truncated data
+logEstimate <- lm(log(Freq) ~ log(degree), data = graph_pl)
+logYpred <- predict(logEstimate)
+
+# The summary of the model shows the r-squared and the p-value
+summary(logEstimate)
+
+# Plot the data points and line of best fit
+plot(Freq ~ degree, data = graph_pl, type = "n", log  = "xy", main = "Log-log plot")
+points(Freq ~ degree, data = graph_pl)
+lines(exp(logYpred) ~ degree, data = graph_pl, col = 2)
+abline(h = c(seq(1, 9, 2), seq(10, 90, 20), seq(100, 1000, 200)), lty = 3, col = colors()[440])
+abline(v = c(seq(1, 9, 2), seq(10, 90, 20), seq(100, 1000, 200)), lty = 3, col = colors()[440])
+
+# This time check the fit against an exponential model
+expEstimate <- lm(Freq ~ log(degree), data = graph_pl)
+summary(expEstimate)
+expYpred <- predict(expEstimate)
+plot(Freq ~ degree, data = graph_pl, type = "n", log  = "x", main = "Exponential plot")
+points(Freq ~ degree, data = graph_pl)
+lines(expYpred ~ degree, data = graph_pl, col = 2)
+abline(h = c(seq(1, 9, 2), seq(10, 90, 20), seq(100, 1000, 200)), lty = 3, col = colors()[440])
+abline(v = c(seq(1, 9, 2), seq(10, 90, 20), seq(100, 1000, 200)), lty = 3, col = colors()[440])
+
+# Pass the object through the power.law.fit() function to find
+# alpha, the lower limit, and the KS.p value
+graph_dd <- degree_distribution(citation_graph, mode = "total")
+plf <- fit_power_law(graph_dd, implementation = "plfit")
+head(plf)
+
+# Calculate the Inverse Cumulative Distribution Function (CDF)
+occur = as.vector(table(graph_hist$degree))
+occur = occur/sum(occur)
+p = occur/sum(occur)
+y = rev(cumsum(rev(p)))
+x = as.numeric(names(table(graph_hist$degree)))
+
+# Plot the Inverse CDF
+plot(x, y, log="xy", type="l", xlab = "Degree", ylab = "Probability",
+     main = "Inverse Cumulative Distribution Function")
+abline(h = seq(0.2, 1, 0.2), lty = 3, col = colors()[440])
+abline(v = c(seq(1, 9, 2), seq(10, 90, 20), seq(100, 1000, 200)), lty = 3, col = colors()[440])
+
+# Calculate the powerlaw line for the model
+pld <- as.numeric(names(table(graph_pl$degree)))
+mod <- displ$new(pld)
+vals <- estimate_xmin(mod)
+# Get the parameters of the model
+mod$setXmin(vals$xmin[1]); mod$setPars(vals$pars[1])
+# Plot the powerlaw line
+lines(mod, col=2)
+
+# Check the fit with the line
+cdf_dd <- data.frame(degree = x, Freq = y)
+cdf_dd <- cdf_dd %>%
+  filter(degree > 0)
+logCDF <- lm(log(Freq) ~ log(degree), cdf_dd)
+summary(logCDF)
